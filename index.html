@@ -180,7 +180,24 @@
     color: #1c75bc;
     font-weight: bold;
   }
-  a.announcement-link { text-decoration:none; color: inherit; }
+  .announcement-cta {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 12px 28px;
+    background: #1c75bc;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 999px;
+    box-shadow: 0 3px 10px rgba(28,117,188,0.35);
+    transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .announcement-cta:hover {
+    background: #155a91;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(28,117,188,0.45);
+  }
   #status-message { text-align:center; padding: 8px; font-family: Arial, sans-serif; }
 </style>
 </head>
@@ -369,7 +386,6 @@
       const previewWidth = 180;
       let left = rect.left + rect.width / 2 - previewWidth / 2;
       left = Math.max(8, Math.min(left, window.innerWidth - previewWidth - 8));
-      let top = rect.top - 8; // will be shifted up by translateY below via top calc
       previewEl.style.left = left + "px";
       // Position above the anchor; fall back below if not enough room
       const estimatedHeight = 160;
@@ -522,7 +538,7 @@
         statusEl.style.display = "none";
 
         gridEl.innerHTML = visibleRows.map(row => {
-          const linkUrl = getField(row, FIELD_LINK) || "#";
+          const linkUrl = (getField(row, FIELD_LINK) || "").toString().trim();
           const caption = getField(row, FIELD_CAPTION) || "";
           const imgSrc = driveImageUrl(getField(row, FIELD_IMAGE));
           const eventDate = parseEventDate(getField(row, FIELD_EVENT_DATE));
@@ -530,13 +546,16 @@
 
           if (!imgSrc) return "";
 
+          const ctaHtml = linkUrl
+            ? `<a class="announcement-cta" href="${linkUrl}" target="_blank" rel="noopener">Learn More &rarr;</a>`
+            : "";
+
           return `
             <div class="announcement-card" data-datekey="${key}">
-              <a class="announcement-link" href="${linkUrl}" target="_blank" rel="noopener">
-                <img src="${imgSrc}" alt="${caption}" referrerpolicy="no-referrer"
-                     onerror="this.closest('.announcement-card').innerHTML = '<p>Could not load image.</p>';">
-                ${caption ? `<div class="caption">${caption}</div>` : ""}
-              </a>
+              <img src="${imgSrc}" alt="${caption}" referrerpolicy="no-referrer"
+                   onerror="this.closest('.announcement-card').innerHTML = '<p>Could not load image.</p>';">
+              ${caption ? `<div class="caption">${caption}</div>` : ""}
+              ${ctaHtml}
             </div>
           `;
         }).join("");
