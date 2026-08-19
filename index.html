@@ -7,13 +7,14 @@
   body { margin:0; font-family: Arial, sans-serif; background: transparent; }
   #announcements {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 16px;
-    justify-content: center;
+    align-items: center;
     padding: 8px;
   }
   .announcement-card {
-    width: 220px;
+    width: 100%;
+    max-width: 400px;
     text-align: center;
   }
   .announcement-card img {
