@@ -127,6 +127,13 @@
   }
   .cal-event-name.has-preview { cursor: pointer; }
 
+  /* Past/hidden events shown for history, styled as muted/faded */
+  .cal-event-name.is-past {
+    background: #f1f2f4;
+    color: #8a94a0;
+    border-left-color: #c7cdd4;
+  }
+
   /* Hover preview image — appended to <body> and positioned via JS so it can
      never be clipped by the calendar's overflow or an embedding iframe. */
   #cal-hover-preview {
@@ -241,7 +248,7 @@
     const FIELD_IMAGE = "Upload Image";
     const FIELD_LINK = "Link URL";
     const FIELD_CAPTION = "Caption";           // optional column; safe if it doesn't exist
-    const FIELD_SHOW = "Show";                 // optional column; add "Yes"/"No" per row to control visibility
+    const FIELD_SHOW = "Show";                 // optional column; add "Yes"/"No" per row to control visibility in the announcement list (calendar still shows it for history)
     const FIELD_EVENT_DATE = "Event Date";     // optional column; used to power the calendar
     const FIELD_EVENT_NAME = "Event Name";     // optional column; short label shown on the calendar day
     const FIELD_CAL_IMAGE = "Calendar Image";  // optional column; hover-preview image shown on the calendar day
@@ -289,7 +296,7 @@
       return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : "";
     }
 
-    // A row is shown unless its Show column is explicitly "no", "false", "0", or "hide"
+    // A row is shown in the announcement list unless its Show column is explicitly "no", "false", "0", or "hide"
     function isVisible(row) {
       const val = (getField(row, FIELD_SHOW) || "").toString().trim().toLowerCase();
       if (val === "") return true; // no Show column filled in yet -> default to visible
@@ -383,8 +390,8 @@
         .replace(/"/g, "&quot;");
     }
 
-    let calendarRows = [];     // every visible row that has an Event Date (image optional)
-    let announcementRows = []; // rows with an image, used for the list below the calendar
+    let calendarRows = [];     // EVERY row that has an Event Date, regardless of Show value (so past/hidden events still show on the calendar for history)
+    let announcementRows = []; // only visible rows with an image, used for the list below the calendar
     let calendarDate = new Date(); // current month being viewed
     calendarDate.setDate(1);
 
@@ -427,7 +434,9 @@
       const today = new Date();
       const todayKey = dateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
-      // Build a map of dateKey -> [{row, isOriginal}] expanding recurrences
+      // Build a map of dateKey -> [{row, isOriginal}] expanding recurrences.
+      // calendarRows includes ALL rows with an Event Date (Show=No rows included) so
+      // past/hidden events remain visible on the calendar as history.
       const eventsByDay = {};
       calendarRows.forEach(row => {
         const occurrences = getOccurrences(row);
@@ -439,7 +448,7 @@
       });
 
       // Which date keys have a matching announcement card (image) to jump to.
-      // Only the ORIGINAL occurrence of a row with an image is linkable.
+      // Only the ORIGINAL occurrence of a VISIBLE row with an image is linkable.
       const linkableKeys = new Set();
       announcementRows.forEach(row => {
         const d = parseEventDate(getField(row, FIELD_EVENT_DATE));
@@ -469,8 +478,13 @@
         const itemsHtml = dayEvents.map(({ row }) => {
           const name = getField(row, FIELD_EVENT_NAME) || getField(row, FIELD_CAPTION) || "Event";
           const previewSrc = drivePreviewUrl(getField(row, FIELD_CAL_IMAGE));
+          const isPast = !isVisible(row); // Show=No rows are rendered muted, as history
 
-          return `<span class="cal-event-name${previewSrc ? " has-preview" : ""}" ${previewSrc ? `data-preview-src="${previewSrc}"` : ""} title="${previewSrc ? "" : escapeHtml(name)}">${escapeHtml(name)}</span>`;
+          const classes = ["cal-event-name"];
+          if (previewSrc) classes.push("has-preview");
+          if (isPast) classes.push("is-past");
+
+          return `<span class="${classes.join(" ")}" ${previewSrc ? `data-preview-src="${previewSrc}"` : ""} title="${previewSrc ? "" : escapeHtml(name)}">${escapeHtml(name)}</span>`;
         }).join("");
 
         html += `
@@ -531,13 +545,14 @@
 
         // Normalize every row's keys so trailing spaces / capitalization
         // differences in the Sheet header row don't break lookups.
-        const rows = rawRows.map(normalizeRow).filter(isVisible);
+        const allRows = rawRows.map(normalizeRow);
 
-        // Calendar shows ANY visible row that has an Event Date, image optional.
-        calendarRows = rows.filter(r => parseEventDate(getField(r, FIELD_EVENT_DATE)));
+        // Calendar shows ANY row that has an Event Date, regardless of Show value,
+        // so events marked "No" still appear on the calendar as history.
+        calendarRows = allRows.filter(r => parseEventDate(getField(r, FIELD_EVENT_DATE)));
 
-        // The image list below only includes rows that actually have an image.
-        announcementRows = rows.filter(r => getField(r, FIELD_IMAGE));
+        // The image list below the calendar only includes VISIBLE rows that have an image.
+        announcementRows = allRows.filter(r => isVisible(r) && getField(r, FIELD_IMAGE));
 
         renderCalendar();
 
