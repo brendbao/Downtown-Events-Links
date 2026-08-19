@@ -107,6 +107,33 @@
     white-space: nowrap;
     border-left: 3px solid #f5a623;
   }
+  .cal-event-thumb {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: #f7fafc;
+    border-radius: 5px;
+    padding: 2px;
+    margin-top: 5px;
+    border-left: 3px solid #f5a623;
+    overflow: hidden;
+  }
+  .cal-event-thumb img {
+    width: 22px;
+    height: 22px;
+    object-fit: cover;
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: block;
+  }
+  .cal-event-thumb span {
+    font-size: 11px;
+    font-weight: 600;
+    color: #1c75bc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   /* Announcement cards */
   #announcements {
@@ -167,10 +194,13 @@
     // your Google Sheet header row, so small typos or trailing spaces are OK.
     const FIELD_IMAGE = "Upload Image";
     const FIELD_LINK = "Link URL";
-    const FIELD_CAPTION = "Caption";       // optional column; safe if it doesn't exist
-    const FIELD_SHOW = "Show";             // optional column; add "Yes"/"No" per row to control visibility
-    const FIELD_EVENT_DATE = "Event Date"; // optional column; used to power the calendar
-    const FIELD_EVENT_NAME = "Event Name"; // optional column; short label shown on the calendar day
+    const FIELD_CAPTION = "Caption";           // optional column; safe if it doesn't exist
+    const FIELD_SHOW = "Show";                 // optional column; add "Yes"/"No" per row to control visibility
+    const FIELD_EVENT_DATE = "Event Date";     // optional column; used to power the calendar
+    const FIELD_EVENT_NAME = "Event Name";     // optional column; short label shown on the calendar day
+    const FIELD_CAL_IMAGE = "Calendar Image";  // optional column; small thumbnail shown on the calendar day
+    const FIELD_REPEAT = "Repeat";             // optional column; "Weekly", "Bi-Weekly", "Monthly"
+    const FIELD_REPEAT_UNTIL = "Repeat Until"; // optional column; date the recurrence stops
 
     // Normalizes a header name for loose matching: lowercase + collapse/trim whitespace
     function normalizeKey(key) {
@@ -205,6 +235,12 @@
       // in <img> tags (OpaqueResponseBlocking). The "thumbnail" endpoint works instead.
       // sz=w2000 requests a high-res version so it stays sharp at full width.
       return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w2000` : "";
+    }
+
+    // Smaller thumbnail size for calendar day cells
+    function driveThumbUrl(driveLink) {
+      const id = extractDriveFileId(driveLink);
+      return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w100` : "";
     }
 
     // A row is shown unless its Show column is explicitly "no", "false", "0", or "hide"
@@ -242,6 +278,57 @@
       return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
     }
 
+    function addMonths(d, n) {
+      const result = new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
+      return result;
+    }
+
+    function addDays(d, n) {
+      const result = new Date(d);
+      result.setDate(result.getDate() + n);
+      return result;
+    }
+
+    // Expands a row's recurrence into a list of occurrence Date objects
+    // (including the original Event Date as the first occurrence).
+    function getOccurrences(row) {
+      const startDate = parseEventDate(getField(row, FIELD_EVENT_DATE));
+      if (!startDate) return [];
+
+      const repeatRaw = (getField(row, FIELD_REPEAT) || "").toString().trim().toLowerCase();
+      const occurrences = [startDate];
+
+      if (!repeatRaw || repeatRaw === "none") {
+        return occurrences;
+      }
+
+      let untilDate = parseEventDate(getField(row, FIELD_REPEAT_UNTIL));
+      if (!untilDate) {
+        // Default to repeating for 1 year if no end date is given
+        untilDate = new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate());
+      }
+
+      const MAX_OCCURRENCES = 500; // safety cap
+      let current = startDate;
+
+      while (occurrences.length < MAX_OCCURRENCES) {
+        if (repeatRaw === "weekly") {
+          current = addDays(current, 7);
+        } else if (repeatRaw === "bi-weekly" || repeatRaw === "biweekly") {
+          current = addDays(current, 14);
+        } else if (repeatRaw === "monthly") {
+          current = addMonths(current, 1);
+        } else {
+          break; // unrecognized repeat value, don't expand
+        }
+
+        if (current > untilDate) break;
+        occurrences.push(current);
+      }
+
+      return occurrences;
+    }
+
     function escapeHtml(str) {
       return (str || "").toString()
         .replace(/&/g, "&amp;")
@@ -267,17 +354,19 @@
       const today = new Date();
       const todayKey = dateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
-      // Build a map of dateKey -> [rows] from ALL calendar rows (image optional)
+      // Build a map of dateKey -> [{row, isOriginal}] expanding recurrences
       const eventsByDay = {};
       calendarRows.forEach(row => {
-        const d = parseEventDate(getField(row, FIELD_EVENT_DATE));
-        if (!d) return;
-        const key = dateKey(d);
-        if (!eventsByDay[key]) eventsByDay[key] = [];
-        eventsByDay[key].push(row);
+        const occurrences = getOccurrences(row);
+        occurrences.forEach((occDate, idx) => {
+          const key = dateKey(occDate);
+          if (!eventsByDay[key]) eventsByDay[key] = [];
+          eventsByDay[key].push({ row, isOriginal: idx === 0 });
+        });
       });
 
-      // Which date keys have a matching announcement card (image) to jump to
+      // Which date keys have a matching announcement card (image) to jump to.
+      // Only the ORIGINAL occurrence of a row with an image is linkable.
       const linkableKeys = new Set();
       announcementRows.forEach(row => {
         const d = parseEventDate(getField(row, FIELD_EVENT_DATE));
@@ -304,15 +393,26 @@
         const hasLink = linkableKeys.has(key);
         const isToday = key === todayKey;
 
-        const namesHtml = dayEvents.map(row => {
+        const itemsHtml = dayEvents.map(({ row }) => {
           const name = getField(row, FIELD_EVENT_NAME) || getField(row, FIELD_CAPTION) || "Event";
+          const calImgSrc = driveThumbUrl(getField(row, FIELD_CAL_IMAGE));
+
+          if (calImgSrc) {
+            return `
+              <span class="cal-event-thumb" title="${escapeHtml(name)}">
+                <img src="${calImgSrc}" alt="${escapeHtml(name)}" referrerpolicy="no-referrer" loading="lazy">
+                <span>${escapeHtml(name)}</span>
+              </span>
+            `;
+          }
+
           return `<span class="cal-event-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
         }).join("");
 
         html += `
           <div class="cal-day${hasEvent ? " has-event" : ""}${hasLink ? " has-link" : ""}${isToday ? " today" : ""}" ${hasLink ? `data-key="${key}"` : ""}>
             <div class="cal-daynum">${day}</div>
-            ${namesHtml}
+            ${itemsHtml}
           </div>
         `;
       }
