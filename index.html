@@ -78,7 +78,12 @@
     padding: 0 0 clamp(4px, 1.6vw, 10px);
   }
   .cal-day {
-    min-height: clamp(46px, 13vw, 100px);
+    /* Plain days (no event) only need room for the day number; days with an
+       event grow to fit their event pill(s) via min-height below. Giving
+       every cell the same tall min-height regardless of content was what
+       made empty days look like oversized blank boxes even after switching
+       the grid to align-items: start. */
+    min-height: clamp(24px, 7vw, 44px);
     align-self: start;
     border: 1px solid #edf0f3;
     border-radius: clamp(6px, 1.6vw, 10px);
@@ -90,7 +95,10 @@
     background: #fff;
     transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .cal-day.empty { border: none; background: transparent; }
+  .cal-day.has-event {
+    min-height: clamp(46px, 13vw, 100px);
+  }
+  .cal-day.empty { border: none; background: transparent; min-height: 0; }
   .cal-day .cal-daynum {
     font-size: clamp(9px, 2.6vw, 14px);
     color: #7c8794;
