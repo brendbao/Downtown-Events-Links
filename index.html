@@ -59,6 +59,13 @@
   #calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    /* align-items: start (instead of the grid default of "stretch") keeps each
+       day cell sized to its own content/min-height. Without this, CSS Grid's
+       default stretch behavior makes every cell in a row match the height of
+       the tallest cell in that row (e.g. a day with 2 events), leaving all the
+       other, empty days in that row awkwardly tall with wasted whitespace -
+       this was the cause of the calendar still looking "condensed"/cramped. */
+    align-items: start;
     gap: clamp(2px, 1.2vw, 8px);
   }
   .cal-daylabel {
@@ -71,7 +78,8 @@
     padding: 0 0 clamp(4px, 1.6vw, 10px);
   }
   .cal-day {
-    aspect-ratio: 4 / 4.6;
+    min-height: clamp(46px, 13vw, 100px);
+    align-self: start;
     border: 1px solid #edf0f3;
     border-radius: clamp(6px, 1.6vw, 10px);
     padding: clamp(3px, 1.4vw, 8px);
@@ -614,6 +622,34 @@
     }
 
     loadAnnouncements();
+
+    // --- Dynamic height reporting for Squarespace/iframe embeds ---
+    // Squarespace embeds this page in a fixed-height <iframe> (see README).
+    // A fixed height either cuts off content when the calendar/announcements
+    // grow, or leaves empty space when they shrink. To let the embed size
+    // itself to the actual rendered content, this posts the page's height to
+    // the parent window whenever it changes; the parent page just needs the
+    // small listener script from the README to resize the iframe to match.
+    if (window.parent && window.parent !== window) {
+      let rafId = null;
+      const reportHeight = () => {
+        const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+        window.parent.postMessage({ type: "downtown-events-height", height }, "*");
+      };
+      const scheduleReport = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(reportHeight);
+      };
+
+      // Catches layout changes from data loading, image loads, calendar
+      // month navigation, and window/font resizing.
+      new ResizeObserver(scheduleReport).observe(document.documentElement);
+      new MutationObserver(scheduleReport).observe(document.body, {
+        childList: true, subtree: true, attributes: true
+      });
+      window.addEventListener("load", scheduleReport);
+      scheduleReport();
+    }
   </script>
 </body>
 </html>
