@@ -121,13 +121,35 @@
     // CONFIG
     const SHEET_JSON_URL = "https://opensheet.elk.sh/1Nfpy-vFPQn5wFcdvDlQpM5cXjfY4uYvzFx0COrc0PAc/Form Responses 1";
 
-    // IMPORTANT: these must match your Google Sheet header row EXACTLY
+    // IMPORTANT: these are matched loosely (case/whitespace-insensitive) against
+    // your Google Sheet header row, so small typos or trailing spaces are OK.
     const FIELD_IMAGE = "Upload Image";
     const FIELD_LINK = "Link URL";
     const FIELD_CAPTION = "Caption";       // optional column; safe if it doesn't exist
     const FIELD_SHOW = "Show";             // optional column; add "Yes"/"No" per row to control visibility
     const FIELD_EVENT_DATE = "Event Date"; // optional column; used to power the calendar
     const FIELD_EVENT_NAME = "Event Name"; // optional column; short label shown on the calendar day
+
+    // Normalizes a header name for loose matching: lowercase + collapse/trim whitespace
+    function normalizeKey(key) {
+      return key.toString().trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    // Given a raw row object from the sheet, returns a new object whose keys
+    // have been trimmed/normalized so lookups work regardless of stray spaces
+    // or capitalization differences in the Google Sheet header row.
+    function normalizeRow(row) {
+      const normalized = {};
+      Object.keys(row).forEach(key => {
+        normalized[normalizeKey(key)] = row[key];
+      });
+      return normalized;
+    }
+
+    // Looks up a field on a normalized row using a "clean" field name constant
+    function getField(row, fieldName) {
+      return row[normalizeKey(fieldName)];
+    }
 
     function extractDriveFileId(url) {
       if (!url) return null;
@@ -145,7 +167,7 @@
 
     // A row is shown unless its Show column is explicitly "no", "false", "0", or "hide"
     function isVisible(row) {
-      const val = (row[FIELD_SHOW] || "").toString().trim().toLowerCase();
+      const val = (getField(row, FIELD_SHOW) || "").toString().trim().toLowerCase();
       if (val === "") return true; // no Show column filled in yet -> default to visible
       return !["no", "false", "0", "hide", "n"].includes(val);
     }
@@ -202,7 +224,7 @@
       // Build a map of dateKey -> [rows]
       const eventsByDay = {};
       allRows.forEach(row => {
-        const d = parseEventDate(row[FIELD_EVENT_DATE]);
+        const d = parseEventDate(getField(row, FIELD_EVENT_DATE));
         if (!d) return;
         const key = dateKey(d);
         if (!eventsByDay[key]) eventsByDay[key] = [];
@@ -228,7 +250,7 @@
         const hasEvent = dayEvents.length > 0;
 
         const namesHtml = dayEvents.map(row => {
-          const name = row[FIELD_EVENT_NAME] || row[FIELD_CAPTION] || "Event";
+          const name = getField(row, FIELD_EVENT_NAME) || getField(row, FIELD_CAPTION) || "Event";
           return `<span class="cal-event-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
         }).join("");
 
@@ -265,8 +287,6 @@
       renderCalendar();
     });
 
-    const FIELD_CAPTION_FALLBACK = FIELD_CAPTION; // kept for clarity in renderCalendar
-
     async function loadAnnouncements() {
       const statusEl = document.getElementById("status-message");
       const gridEl = document.getElementById("announcements");
@@ -274,14 +294,18 @@
       try {
         const res = await fetch(SHEET_JSON_URL);
         if (!res.ok) throw new Error("Sheet fetch failed: " + res.status);
-        const rows = await res.json();
+        const rawRows = await res.json();
 
-        if (!Array.isArray(rows) || rows.length === 0) {
+        if (!Array.isArray(rawRows) || rawRows.length === 0) {
           statusEl.innerText = "No announcements yet.";
           return;
         }
 
-        allRows = rows.filter(r => r[FIELD_IMAGE] && isVisible(r));
+        // Normalize every row's keys so trailing spaces / capitalization
+        // differences in the Sheet header row don't break lookups.
+        const rows = rawRows.map(normalizeRow);
+
+        allRows = rows.filter(r => getField(r, FIELD_IMAGE) && isVisible(r));
         renderCalendar();
 
         // Most recent first
@@ -295,10 +319,10 @@
         statusEl.style.display = "none";
 
         gridEl.innerHTML = visibleRows.map(row => {
-          const linkUrl = row[FIELD_LINK] || "#";
-          const caption = row[FIELD_CAPTION] || "";
-          const imgSrc = driveImageUrl(row[FIELD_IMAGE]);
-          const eventDate = parseEventDate(row[FIELD_EVENT_DATE]);
+          const linkUrl = getField(row, FIELD_LINK) || "#";
+          const caption = getField(row, FIELD_CAPTION) || "";
+          const imgSrc = driveImageUrl(getField(row, FIELD_IMAGE));
+          const eventDate = parseEventDate(getField(row, FIELD_EVENT_DATE));
           const key = eventDate ? dateKey(eventDate) : "";
 
           if (!imgSrc) return "";
