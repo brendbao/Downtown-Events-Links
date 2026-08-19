@@ -8,25 +8,26 @@
   #announcements {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 32px;
     align-items: center;
     padding: 8px;
   }
   .announcement-card {
     width: 100%;
-    max-width: 400px;
+    max-width: 1200px;
     text-align: center;
   }
   .announcement-card img {
-    max-width: 100%;
+    width: 100%;
     height: auto;
-    border-radius: 8px;
+    border-radius: 12px;
     display: block;
     margin: 0 auto;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
   }
   .announcement-card .caption {
-    margin-top: 8px;
-    font-size: 14px;
+    margin-top: 10px;
+    font-size: 18px;
     color: #333;
   }
   a.announcement-link { text-decoration:none; color: inherit; }
@@ -57,7 +58,8 @@
       const id = extractDriveFileId(driveLink);
       // Google Drive blocks the old "uc?export=view" format from being embedded
       // in <img> tags (OpaqueResponseBlocking). The "thumbnail" endpoint works instead.
-      return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1000` : "";
+      // sz=w2000 requests a high-res version so it stays sharp at full width.
+      return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w2000` : "";
     }
 
     // A row is shown unless its Show column is explicitly "no", "false", "0", or "hide"
