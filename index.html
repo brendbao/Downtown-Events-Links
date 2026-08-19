@@ -82,7 +82,8 @@
 
         container.innerHTML = `
           <a class="announcement-link" href="${linkUrl}" target="_blank" rel="noopener">
-            <img src="${imgSrc}" alt="${caption}">
+            <img src="${imgSrc}" alt="${caption}" referrerpolicy="no-referrer" crossorigin="anonymous"
+                 onerror="this.onerror=null; document.getElementById('announcement').innerHTML = '<p>Could not load image. Make sure the Drive file is shared as \\'Anyone with the link\\'.</p><a href=\\'' + '${imgSrc}'.replace(/'/g, '') + '\\' target=\\'_blank\\'>Open image directly</a>';">
           </a>
           ${caption ? `<div id="caption">${caption}</div>` : ""}
         `;
