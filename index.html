@@ -69,7 +69,7 @@
     font-size: 13px;
     position: relative;
     cursor: default;
-    overflow: hidden;
+    overflow: visible;
     background: #fff;
     transition: background 0.15s ease, border-color 0.15s ease;
   }
@@ -92,7 +92,9 @@
   .cal-day.has-event { border-color: #dbe8f2; }
   .cal-day.has-link { cursor: pointer; }
   .cal-day.has-link:hover { background: #f6fafd; border-color: #1c75bc; }
+
   .cal-event-name {
+    position: relative;
     display: block;
     background: #eaf3fb;
     color: #1c75bc;
@@ -106,33 +108,33 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     border-left: 3px solid #f5a623;
+    z-index: 1;
   }
-  .cal-event-thumb {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    background: #f7fafc;
-    border-radius: 5px;
-    padding: 2px;
-    margin-top: 5px;
-    border-left: 3px solid #f5a623;
-    overflow: hidden;
+  .cal-event-name.has-preview { cursor: pointer; }
+
+  /* Hover preview image, hidden by default */
+  .cal-event-preview {
+    display: none;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    width: 160px;
+    z-index: 20;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    padding: 6px;
+    pointer-events: none;
   }
-  .cal-event-thumb img {
-    width: 22px;
-    height: 22px;
-    object-fit: cover;
-    border-radius: 3px;
-    flex-shrink: 0;
+  .cal-event-preview img {
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
     display: block;
   }
-  .cal-event-thumb span {
-    font-size: 11px;
-    font-weight: 600;
-    color: #1c75bc;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .cal-event-name.has-preview:hover .cal-event-preview {
+    display: block;
   }
 
   /* Announcement cards */
@@ -198,7 +200,7 @@
     const FIELD_SHOW = "Show";                 // optional column; add "Yes"/"No" per row to control visibility
     const FIELD_EVENT_DATE = "Event Date";     // optional column; used to power the calendar
     const FIELD_EVENT_NAME = "Event Name";     // optional column; short label shown on the calendar day
-    const FIELD_CAL_IMAGE = "Calendar Image";  // optional column; small thumbnail shown on the calendar day
+    const FIELD_CAL_IMAGE = "Calendar Image";  // optional column; hover-preview image shown on the calendar day
     const FIELD_REPEAT = "Repeat";             // optional column; "Weekly", "Bi-Weekly", "Monthly"
     const FIELD_REPEAT_UNTIL = "Repeat Until"; // optional column; date the recurrence stops
 
@@ -237,10 +239,10 @@
       return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w2000` : "";
     }
 
-    // Smaller thumbnail size for calendar day cells
-    function driveThumbUrl(driveLink) {
+    // Medium-size preview for the hover popup
+    function drivePreviewUrl(driveLink) {
       const id = extractDriveFileId(driveLink);
-      return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w100` : "";
+      return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : "";
     }
 
     // A row is shown unless its Show column is explicitly "no", "false", "0", or "hide"
@@ -395,18 +397,18 @@
 
         const itemsHtml = dayEvents.map(({ row }) => {
           const name = getField(row, FIELD_EVENT_NAME) || getField(row, FIELD_CAPTION) || "Event";
-          const calImgSrc = driveThumbUrl(getField(row, FIELD_CAL_IMAGE));
+          const previewSrc = drivePreviewUrl(getField(row, FIELD_CAL_IMAGE));
 
-          if (calImgSrc) {
-            return `
-              <span class="cal-event-thumb" title="${escapeHtml(name)}">
-                <img src="${calImgSrc}" alt="${escapeHtml(name)}" referrerpolicy="no-referrer" loading="lazy">
-                <span>${escapeHtml(name)}</span>
-              </span>
-            `;
-          }
-
-          return `<span class="cal-event-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+          return `
+            <span class="cal-event-name${previewSrc ? " has-preview" : ""}" title="${previewSrc ? "" : escapeHtml(name)}">
+              ${escapeHtml(name)}
+              ${previewSrc ? `
+                <span class="cal-event-preview">
+                  <img src="${previewSrc}" alt="${escapeHtml(name)}" referrerpolicy="no-referrer" loading="lazy">
+                </span>
+              ` : ""}
+            </span>
+          `;
         }).join("");
 
         html += `
