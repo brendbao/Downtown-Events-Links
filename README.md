@@ -19,8 +19,37 @@ as a clickable image, for embedding into the Squarespace "Downtown Events" page.
 - [ ] Widget URL embedded into Squarespace via an Embed/Code block (iframe)
 
 ## Embedding into Squarespace
-Once GitHub Pages is live, embed with something like:
+Once GitHub Pages is live, embed with a Squarespace **Code Block** (not a plain URL/Embed
+block — it needs to run the `<script>` below) containing:
 
 ```html
-<iframe src="https://brendbao.github.io/Downtown-Events-Links/" width="100%" height="500" style="border:none;"></iframe>
+<iframe id="downtown-events-widget"
+        src="https://brendbao.github.io/Downtown-Events-Links/?v=2"
+        width="100%" height="500" style="border:none;" scrolling="no"></iframe>
+<script>
+  window.addEventListener("message", function (event) {
+    if (!event.data || event.data.type !== "downtown-events-height") return;
+    var iframe = document.getElementById("downtown-events-widget");
+    if (iframe) iframe.style.height = event.data.height + "px";
+  });
+</script>
 ```
+
+The `height="500"` on the iframe is only an initial/fallback value. `index.html` posts
+its actual rendered height (via `postMessage`) to the parent page whenever the content
+changes — new announcements loading, images finishing loading, or switching calendar
+months — and the listener script above resizes the iframe to match, so the calendar
+and announcement list are never cut off or padded with dead space. `scrolling="no"`
+avoids a second/inner scrollbar since the iframe now grows to fit its content instead
+of scrolling internally.
+
+The `?v=2` query string is a cache-buster. Browsers and Squarespace's CDN can cache
+iframe contents, so after pushing changes to `index.html` on `main` (and waiting for
+the "pages build and deployment" GitHub Action to finish), bump the number in the
+Squarespace embed code (e.g. `?v=3`) and re-save the page so it fetches the latest
+version instead of a stale cached copy.
+
+**Note:** GitHub Pages only serves what's on the `main` branch. If you don't see your
+latest changes reflected on the live Squarespace page, first confirm the change has
+been merged into `main` and that the "pages build and deployment" workflow has
+completed (Actions tab), before assuming it's a caching issue.
