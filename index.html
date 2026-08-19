@@ -5,20 +5,36 @@
 <title>Downtown Events Announcement Widget</title>
 <style>
   body { margin:0; font-family: Arial, sans-serif; background: transparent; }
-  #announcement { text-align:center; padding: 8px; }
-  #announcement img {
+  #announcements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    padding: 8px;
+  }
+  .announcement-card {
+    width: 220px;
+    text-align: center;
+  }
+  .announcement-card img {
     max-width: 100%;
     height: auto;
     border-radius: 8px;
     display: block;
     margin: 0 auto;
   }
-  #caption { margin-top: 8px; font-size: 14px; color: #333; }
-  a.announcement-link { text-decoration:none; }
+  .announcement-card .caption {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #333;
+  }
+  a.announcement-link { text-decoration:none; color: inherit; }
+  #status-message { text-align:center; padding: 8px; font-family: Arial, sans-serif; }
 </style>
 </head>
 <body>
-  <div id="announcement">Loading announcement…</div>
+  <div id="status-message">Loading announcements…</div>
+  <div id="announcements"></div>
 
   <script>
     // CONFIG
@@ -27,7 +43,8 @@
     // IMPORTANT: these must match your Google Sheet header row EXACTLY
     const FIELD_IMAGE = "Upload Image";
     const FIELD_LINK = "Link URL";
-    const FIELD_CAPTION = "Caption"; // optional column; safe if it doesn't exist
+    const FIELD_CAPTION = "Caption";     // optional column; safe if it doesn't exist
+    const FIELD_SHOW = "Show";           // optional column; add "Yes"/"No" per row to control visibility
 
     function extractDriveFileId(url) {
       if (!url) return null;
@@ -42,58 +59,64 @@
       return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1000` : "";
     }
 
-    async function loadAnnouncement() {
-      const container = document.getElementById("announcement");
+    // A row is shown unless its Show column is explicitly "no", "false", "0", or "hide"
+    function isVisible(row) {
+      const val = (row[FIELD_SHOW] || "").toString().trim().toLowerCase();
+      if (val === "") return true; // no Show column filled in yet -> default to visible
+      return !["no", "false", "0", "hide", "n"].includes(val);
+    }
+
+    async function loadAnnouncements() {
+      const statusEl = document.getElementById("status-message");
+      const gridEl = document.getElementById("announcements");
+
       try {
         const res = await fetch(SHEET_JSON_URL);
         if (!res.ok) throw new Error("Sheet fetch failed: " + res.status);
         const rows = await res.json();
 
         if (!Array.isArray(rows) || rows.length === 0) {
-          container.innerText = "No announcements yet.";
+          statusEl.innerText = "No announcements yet.";
           return;
         }
 
-        // Find the most recent row that actually has an image value
-        let latest = null;
-        for (let i = rows.length - 1; i >= 0; i--) {
-          if (rows[i][FIELD_IMAGE]) {
-            latest = rows[i];
-            break;
-          }
-        }
+        // Most recent first, only rows with an image and Show !== "No"
+        const visibleRows = rows
+          .filter(r => r[FIELD_IMAGE] && isVisible(r))
+          .reverse();
 
-        if (!latest) {
-          container.innerText = "No announcements yet.";
+        if (visibleRows.length === 0) {
+          statusEl.innerText = "No announcements right now.";
           return;
         }
 
-        const imageCell = latest[FIELD_IMAGE];
-        const linkUrl   = latest[FIELD_LINK] || "#";
-        const caption   = latest[FIELD_CAPTION] || "";
+        statusEl.style.display = "none";
 
-        const imgSrc = driveImageUrl(imageCell);
+        gridEl.innerHTML = visibleRows.map(row => {
+          const linkUrl = row[FIELD_LINK] || "#";
+          const caption = row[FIELD_CAPTION] || "";
+          const imgSrc = driveImageUrl(row[FIELD_IMAGE]);
 
-        if (!imgSrc) {
-          container.innerText = "Could not read image from latest submission. Check field names in index.html.";
-          console.warn("Latest row:", latest);
-          return;
-        }
+          if (!imgSrc) return "";
 
-        container.innerHTML = `
-          <a class="announcement-link" href="${linkUrl}" target="_blank" rel="noopener">
-            <img src="${imgSrc}" alt="${caption}" referrerpolicy="no-referrer"
-                 onerror="this.onerror=null; document.getElementById('announcement').innerHTML = '<p>Could not load image. Make sure the Drive file is shared as &quot;Anyone with the link&quot;.</p><a href=\\'${imgSrc}\\' target=\\'_blank\\'>Open image directly</a>';">
-          </a>
-          ${caption ? `<div id="caption">${caption}</div>` : ""}
-        `;
+          return `
+            <div class="announcement-card">
+              <a class="announcement-link" href="${linkUrl}" target="_blank" rel="noopener">
+                <img src="${imgSrc}" alt="${caption}" referrerpolicy="no-referrer"
+                     onerror="this.closest('.announcement-card').innerHTML = '<p>Could not load image.</p>';">
+                ${caption ? `<div class="caption">${caption}</div>` : ""}
+              </a>
+            </div>
+          `;
+        }).join("");
+
       } catch (err) {
-        container.innerText = "Could not load announcement.";
+        statusEl.innerText = "Could not load announcements.";
         console.error(err);
       }
     }
 
-    loadAnnouncement();
+    loadAnnouncements();
   </script>
 </body>
 </html>
