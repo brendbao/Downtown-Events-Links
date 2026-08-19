@@ -4,7 +4,61 @@
 <meta charset="UTF-8">
 <title>Downtown Events Announcement Widget</title>
 <style>
-  body { margin:0; font-family: Arial, sans-serif; background: transparent; }
+  body { margin:0; font-family: Arial, sans-serif; background: transparent; color:#222; }
+
+  /* Calendar */
+  #calendar-wrap { max-width: 900px; margin: 0 auto 32px; padding: 8px; }
+  #calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  #calendar-header button {
+    background: #f2670a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #calendar-header button:hover { opacity: 0.9; }
+  #calendar-title { font-size: 20px; font-weight: bold; }
+  #calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .cal-daylabel {
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #888;
+    padding: 4px 0;
+  }
+  .cal-day {
+    min-height: 64px;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    padding: 4px;
+    font-size: 13px;
+    position: relative;
+    cursor: default;
+  }
+  .cal-day.empty { border: none; }
+  .cal-day .cal-daynum { font-size: 12px; color: #555; }
+  .cal-day.has-event { cursor: pointer; background: #fff6ee; border-color: #f2670a; }
+  .cal-day.has-event:hover { background: #ffe9d6; }
+  .cal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f2670a;
+    margin: 4px auto 0;
+  }
+
+  /* Announcement cards */
   #announcements {
     display: flex;
     flex-direction: column;
@@ -16,6 +70,12 @@
     width: 100%;
     max-width: 1200px;
     text-align: center;
+    transition: box-shadow 0.3s ease;
+    border-radius: 12px;
+    scroll-margin-top: 16px;
+  }
+  .announcement-card.highlight {
+    box-shadow: 0 0 0 4px #f2670a;
   }
   .announcement-card img {
     width: 100%;
@@ -35,6 +95,16 @@
 </style>
 </head>
 <body>
+
+  <div id="calendar-wrap">
+    <div id="calendar-header">
+      <button id="cal-prev">&#8592; Prev</button>
+      <div id="calendar-title"></div>
+      <button id="cal-next">Next &#8594;</button>
+    </div>
+    <div id="calendar-grid"></div>
+  </div>
+
   <div id="status-message">Loading announcements…</div>
   <div id="announcements"></div>
 
@@ -45,8 +115,9 @@
     // IMPORTANT: these must match your Google Sheet header row EXACTLY
     const FIELD_IMAGE = "Upload Image";
     const FIELD_LINK = "Link URL";
-    const FIELD_CAPTION = "Caption";     // optional column; safe if it doesn't exist
-    const FIELD_SHOW = "Show";           // optional column; add "Yes"/"No" per row to control visibility
+    const FIELD_CAPTION = "Caption";       // optional column; safe if it doesn't exist
+    const FIELD_SHOW = "Show";             // optional column; add "Yes"/"No" per row to control visibility
+    const FIELD_EVENT_DATE = "Event Date"; // optional column; used to power the calendar
 
     function extractDriveFileId(url) {
       if (!url) return null;
@@ -69,6 +140,106 @@
       return !["no", "false", "0", "hide", "n"].includes(val);
     }
 
+    // Parse a variety of date formats (MM/DD/YYYY, YYYY-MM-DD, etc.) into a Date object (local, no time)
+    function parseEventDate(value) {
+      if (!value) return null;
+      const str = value.toString().trim();
+      if (!str) return null;
+
+      // Try native parsing first
+      let d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      }
+
+      // Try MM/DD/YYYY manually as fallback
+      const parts = str.split(/[\/\-]/);
+      if (parts.length === 3) {
+        let [a, b, c] = parts.map(p => parseInt(p, 10));
+        if (c < 100) c += 2000;
+        // assume MM/DD/YYYY
+        d = new Date(c, a - 1, b);
+        if (!isNaN(d.getTime())) return d;
+      }
+      return null;
+    }
+
+    function dateKey(d) {
+      return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    }
+
+    let allRows = [];
+    let calendarDate = new Date(); // current month being viewed
+    calendarDate.setDate(1);
+
+    function renderCalendar() {
+      const grid = document.getElementById("calendar-grid");
+      const title = document.getElementById("calendar-title");
+
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      title.innerText = monthNames[month] + " " + year;
+
+      // Build a map of dateKey -> [rows]
+      const eventsByDay = {};
+      allRows.forEach(row => {
+        const d = parseEventDate(row[FIELD_EVENT_DATE]);
+        if (!d) return;
+        const key = dateKey(d);
+        if (!eventsByDay[key]) eventsByDay[key] = [];
+        eventsByDay[key].push(row);
+      });
+
+      const firstDay = new Date(year, month, 1);
+      const startWeekday = firstDay.getDay(); // 0 = Sun
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      let html = "";
+      ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d => {
+        html += `<div class="cal-daylabel">${d}</div>`;
+      });
+
+      for (let i = 0; i < startWeekday; i++) {
+        html += `<div class="cal-day empty"></div>`;
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = dateKey(new Date(year, month, day));
+        const hasEvent = !!eventsByDay[key];
+        html += `
+          <div class="cal-day${hasEvent ? " has-event" : ""}" ${hasEvent ? `data-key="${key}"` : ""}>
+            <div class="cal-daynum">${day}</div>
+            ${hasEvent ? `<div class="cal-dot" title="${eventsByDay[key].length} event(s)"></div>` : ""}
+          </div>
+        `;
+      }
+
+      grid.innerHTML = html;
+
+      // Wire up click-to-scroll on days with events
+      grid.querySelectorAll(".cal-day.has-event").forEach(el => {
+        el.addEventListener("click", () => {
+          const key = el.getAttribute("data-key");
+          const target = document.querySelector(`.announcement-card[data-datekey="${key}"]`);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+            target.classList.add("highlight");
+            setTimeout(() => target.classList.remove("highlight"), 2000);
+          }
+        });
+      });
+    }
+
+    document.getElementById("cal-prev").addEventListener("click", () => {
+      calendarDate.setMonth(calendarDate.getMonth() - 1);
+      renderCalendar();
+    });
+    document.getElementById("cal-next").addEventListener("click", () => {
+      calendarDate.setMonth(calendarDate.getMonth() + 1);
+      renderCalendar();
+    });
+
     async function loadAnnouncements() {
       const statusEl = document.getElementById("status-message");
       const gridEl = document.getElementById("announcements");
@@ -83,10 +254,11 @@
           return;
         }
 
-        // Most recent first, only rows with an image and Show !== "No"
-        const visibleRows = rows
-          .filter(r => r[FIELD_IMAGE] && isVisible(r))
-          .reverse();
+        allRows = rows.filter(r => r[FIELD_IMAGE] && isVisible(r));
+        renderCalendar();
+
+        // Most recent first
+        const visibleRows = allRows.slice().reverse();
 
         if (visibleRows.length === 0) {
           statusEl.innerText = "No announcements right now.";
@@ -99,11 +271,13 @@
           const linkUrl = row[FIELD_LINK] || "#";
           const caption = row[FIELD_CAPTION] || "";
           const imgSrc = driveImageUrl(row[FIELD_IMAGE]);
+          const eventDate = parseEventDate(row[FIELD_EVENT_DATE]);
+          const key = eventDate ? dateKey(eventDate) : "";
 
           if (!imgSrc) return "";
 
           return `
-            <div class="announcement-card">
+            <div class="announcement-card" data-datekey="${key}">
               <a class="announcement-link" href="${linkUrl}" target="_blank" rel="noopener">
                 <img src="${imgSrc}" alt="${caption}" referrerpolicy="no-referrer"
                      onerror="this.closest('.announcement-card').innerHTML = '<p>Could not load image.</p>';">
