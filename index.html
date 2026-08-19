@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Downtown Events Announcement Widget</title>
 <style>
   * { box-sizing: border-box; }
@@ -218,6 +219,25 @@
     box-shadow: 0 5px 14px rgba(28,117,188,0.45);
   }
   #status-message { text-align:center; padding: 8px; font-family: Arial, sans-serif; }
+
+  /* Responsive tweaks for narrow screens (phones, and narrow Squarespace embeds) */
+  @media (max-width: 600px) {
+    #calendar-wrap { padding: 16px 12px 18px; border-radius: 12px; margin-bottom: 24px; }
+    #calendar-header button { width: 36px; height: 36px; font-size: 18px; }
+    #calendar-title { font-size: 18px; }
+    #calendar-grid { gap: 4px; }
+    .cal-daylabel { font-size: 10px; padding: 0 0 6px; }
+    .cal-day { min-height: 56px; padding: 4px; font-size: 10px; border-radius: 6px; }
+    .cal-day .cal-daynum { font-size: 11px; }
+    .cal-day.today .cal-daynum { width: 18px; height: 18px; }
+    .cal-view-badge { font-size: 7px; padding: 1px 5px; top: 3px; right: 3px; }
+    .cal-event-name { font-size: 9px; padding: 2px 4px; margin-top: 3px; }
+    #announcements-title { font-size: 20px; margin-bottom: 14px; }
+    #announcements { gap: 20px; padding: 4px; }
+    .announcement-card .caption { font-size: 15px; }
+    .announcement-cta { padding: 10px 22px; font-size: 14px; }
+    #cal-hover-preview { width: 130px; }
+  }
 </style>
 </head>
 <body>
