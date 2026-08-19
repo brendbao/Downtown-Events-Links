@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Downtown Events Announcement Widget</title>
 <style>
   * { box-sizing: border-box; }
@@ -218,6 +219,49 @@
     box-shadow: 0 5px 14px rgba(28,117,188,0.45);
   }
   #status-message { text-align:center; padding: 8px; font-family: Arial, sans-serif; }
+
+  /* Mobile responsiveness */
+  @media (max-width: 600px) {
+    #calendar-wrap {
+      padding: 16px 8px 16px;
+      border-radius: 12px;
+      margin: 0 auto 24px;
+    }
+    #calendar-header { margin-bottom: 12px; }
+    #calendar-header button {
+      width: 34px;
+      height: 34px;
+      font-size: 16px;
+    }
+    #calendar-title { font-size: 18px; }
+    #calendar-grid { gap: 4px; }
+    .cal-daylabel {
+      font-size: 10px;
+      padding: 0 0 6px;
+    }
+    .cal-day {
+      min-height: 48px;
+      padding: 4px;
+      border-radius: 8px;
+    }
+    .cal-day .cal-daynum { font-size: 12px; }
+    .cal-day.today .cal-daynum {
+      width: 20px;
+      height: 20px;
+    }
+    .cal-view-badge {
+      font-size: 7px;
+      padding: 1px 4px;
+      top: 3px;
+      right: 3px;
+    }
+    .cal-event-name {
+      font-size: 10px;
+      padding: 3px 4px;
+      margin-top: 3px;
+      border-left-width: 2px;
+    }
+  }
 </style>
 </head>
 <body>
