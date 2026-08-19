@@ -89,8 +89,9 @@
     background: #1c75bc;
     color: #fff;
   }
-  .cal-day.has-event { cursor: pointer; border-color: #dbe8f2; }
-  .cal-day.has-event:hover { background: #f6fafd; border-color: #1c75bc; }
+  .cal-day.has-event { border-color: #dbe8f2; }
+  .cal-day.has-link { cursor: pointer; }
+  .cal-day.has-link:hover { background: #f6fafd; border-color: #1c75bc; }
   .cal-event-name {
     display: block;
     background: #eaf3fb;
@@ -249,7 +250,8 @@
         .replace(/"/g, "&quot;");
     }
 
-    let allRows = [];
+    let calendarRows = [];     // every visible row that has an Event Date (image optional)
+    let announcementRows = []; // rows with an image, used for the list below the calendar
     let calendarDate = new Date(); // current month being viewed
     calendarDate.setDate(1);
 
@@ -265,14 +267,21 @@
       const today = new Date();
       const todayKey = dateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
-      // Build a map of dateKey -> [rows]
+      // Build a map of dateKey -> [rows] from ALL calendar rows (image optional)
       const eventsByDay = {};
-      allRows.forEach(row => {
+      calendarRows.forEach(row => {
         const d = parseEventDate(getField(row, FIELD_EVENT_DATE));
         if (!d) return;
         const key = dateKey(d);
         if (!eventsByDay[key]) eventsByDay[key] = [];
         eventsByDay[key].push(row);
+      });
+
+      // Which date keys have a matching announcement card (image) to jump to
+      const linkableKeys = new Set();
+      announcementRows.forEach(row => {
+        const d = parseEventDate(getField(row, FIELD_EVENT_DATE));
+        if (d) linkableKeys.add(dateKey(d));
       });
 
       const firstDay = new Date(year, month, 1);
@@ -292,6 +301,7 @@
         const key = dateKey(new Date(year, month, day));
         const dayEvents = eventsByDay[key] || [];
         const hasEvent = dayEvents.length > 0;
+        const hasLink = linkableKeys.has(key);
         const isToday = key === todayKey;
 
         const namesHtml = dayEvents.map(row => {
@@ -300,7 +310,7 @@
         }).join("");
 
         html += `
-          <div class="cal-day${hasEvent ? " has-event" : ""}${isToday ? " today" : ""}" ${hasEvent ? `data-key="${key}"` : ""}>
+          <div class="cal-day${hasEvent ? " has-event" : ""}${hasLink ? " has-link" : ""}${isToday ? " today" : ""}" ${hasLink ? `data-key="${key}"` : ""}>
             <div class="cal-daynum">${day}</div>
             ${namesHtml}
           </div>
@@ -309,8 +319,8 @@
 
       grid.innerHTML = html;
 
-      // Wire up click-to-scroll on days with events
-      grid.querySelectorAll(".cal-day.has-event").forEach(el => {
+      // Wire up click-to-scroll only on days that have a matching announcement card
+      grid.querySelectorAll(".cal-day.has-link").forEach(el => {
         el.addEventListener("click", () => {
           const key = el.getAttribute("data-key");
           const target = document.querySelector(`.announcement-card[data-datekey="${key}"]`);
@@ -343,18 +353,24 @@
 
         if (!Array.isArray(rawRows) || rawRows.length === 0) {
           statusEl.innerText = "No announcements yet.";
+          renderCalendar();
           return;
         }
 
         // Normalize every row's keys so trailing spaces / capitalization
         // differences in the Sheet header row don't break lookups.
-        const rows = rawRows.map(normalizeRow);
+        const rows = rawRows.map(normalizeRow).filter(isVisible);
 
-        allRows = rows.filter(r => getField(r, FIELD_IMAGE) && isVisible(r));
+        // Calendar shows ANY visible row that has an Event Date, image optional.
+        calendarRows = rows.filter(r => parseEventDate(getField(r, FIELD_EVENT_DATE)));
+
+        // The image list below only includes rows that actually have an image.
+        announcementRows = rows.filter(r => getField(r, FIELD_IMAGE));
+
         renderCalendar();
 
         // Most recent first
-        const visibleRows = allRows.slice().reverse();
+        const visibleRows = announcementRows.slice().reverse();
 
         if (visibleRows.length === 0) {
           statusEl.innerText = "No announcements right now.";
