@@ -69,7 +69,7 @@
     font-size: 13px;
     position: relative;
     cursor: default;
-    overflow: visible;
+    overflow: hidden;
     background: #fff;
     transition: background 0.15s ease, border-color 0.15s ease;
   }
@@ -93,8 +93,24 @@
   .cal-day.has-link { cursor: pointer; }
   .cal-day.has-link:hover { background: #f6fafd; border-color: #1c75bc; }
 
+  /* "View" badge shown in the corner of days that link to a full announcement */
+  .cal-view-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: #1c75bc;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 2px 7px;
+    line-height: 1.4;
+    pointer-events: none;
+  }
+
   .cal-event-name {
-    position: relative;
     display: block;
     background: #eaf3fb;
     color: #1c75bc;
@@ -108,32 +124,26 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     border-left: 3px solid #f5a623;
-    z-index: 1;
   }
   .cal-event-name.has-preview { cursor: pointer; }
 
-  /* Hover preview image, hidden by default */
-  .cal-event-preview {
+  /* Hover preview image — appended to <body> and positioned via JS so it can
+     never be clipped by the calendar's overflow or an embedding iframe. */
+  #cal-hover-preview {
     display: none;
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 8px);
-    transform: translateX(-50%);
-    width: 160px;
-    z-index: 20;
+    position: fixed;
+    z-index: 9999;
+    width: 180px;
     background: #fff;
     border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
     padding: 6px;
     pointer-events: none;
   }
-  .cal-event-preview img {
+  #cal-hover-preview img {
     width: 100%;
     height: auto;
     border-radius: 6px;
-    display: block;
-  }
-  .cal-event-name.has-preview:hover .cal-event-preview {
     display: block;
   }
 
@@ -187,6 +197,9 @@
 
   <div id="status-message">Loading announcements…</div>
   <div id="announcements"></div>
+
+  <!-- Floating hover-preview image, positioned via JS -->
+  <div id="cal-hover-preview"><img id="cal-hover-preview-img" src="" alt=""></div>
 
   <script>
     // CONFIG
@@ -344,6 +357,34 @@
     let calendarDate = new Date(); // current month being viewed
     calendarDate.setDate(1);
 
+    // --- Hover preview (floating, positioned relative to viewport so it can't be clipped) ---
+    const previewEl = document.getElementById("cal-hover-preview");
+    const previewImgEl = document.getElementById("cal-hover-preview-img");
+
+    function showPreview(anchorEl, src) {
+      if (!src) return;
+      previewImgEl.src = src;
+      previewEl.style.display = "block";
+      const rect = anchorEl.getBoundingClientRect();
+      const previewWidth = 180;
+      let left = rect.left + rect.width / 2 - previewWidth / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - previewWidth - 8));
+      let top = rect.top - 8; // will be shifted up by translateY below via top calc
+      previewEl.style.left = left + "px";
+      // Position above the anchor; fall back below if not enough room
+      const estimatedHeight = 160;
+      if (rect.top - estimatedHeight > 0) {
+        previewEl.style.top = (rect.top - estimatedHeight) + "px";
+      } else {
+        previewEl.style.top = (rect.bottom + 8) + "px";
+      }
+    }
+
+    function hidePreview() {
+      previewEl.style.display = "none";
+      previewImgEl.src = "";
+    }
+
     function renderCalendar() {
       const grid = document.getElementById("calendar-grid");
       const title = document.getElementById("calendar-title");
@@ -399,20 +440,12 @@
           const name = getField(row, FIELD_EVENT_NAME) || getField(row, FIELD_CAPTION) || "Event";
           const previewSrc = drivePreviewUrl(getField(row, FIELD_CAL_IMAGE));
 
-          return `
-            <span class="cal-event-name${previewSrc ? " has-preview" : ""}" title="${previewSrc ? "" : escapeHtml(name)}">
-              ${escapeHtml(name)}
-              ${previewSrc ? `
-                <span class="cal-event-preview">
-                  <img src="${previewSrc}" alt="${escapeHtml(name)}" referrerpolicy="no-referrer" loading="lazy">
-                </span>
-              ` : ""}
-            </span>
-          `;
+          return `<span class="cal-event-name${previewSrc ? " has-preview" : ""}" ${previewSrc ? `data-preview-src="${previewSrc}"` : ""} title="${previewSrc ? "" : escapeHtml(name)}">${escapeHtml(name)}</span>`;
         }).join("");
 
         html += `
           <div class="cal-day${hasEvent ? " has-event" : ""}${hasLink ? " has-link" : ""}${isToday ? " today" : ""}" ${hasLink ? `data-key="${key}"` : ""}>
+            ${hasLink ? `<span class="cal-view-badge">View</span>` : ""}
             <div class="cal-daynum">${day}</div>
             ${itemsHtml}
           </div>
@@ -432,6 +465,13 @@
             setTimeout(() => target.classList.remove("highlight"), 2000);
           }
         });
+      });
+
+      // Wire up hover preview on event labels that have a Calendar Image
+      grid.querySelectorAll(".cal-event-name.has-preview").forEach(el => {
+        const src = el.getAttribute("data-preview-src");
+        el.addEventListener("mouseenter", () => showPreview(el, src));
+        el.addEventListener("mouseleave", hidePreview);
       });
     }
 
