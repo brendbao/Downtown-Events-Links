@@ -22,5 +22,16 @@ as a clickable image, for embedding into the Squarespace "Downtown Events" page.
 Once GitHub Pages is live, embed with something like:
 
 ```html
-<iframe src="https://brendbao.github.io/Downtown-Events-Links/" width="100%" height="500" style="border:none;"></iframe>
+<iframe src="https://brendbao.github.io/Downtown-Events-Links/?v=2" width="100%" height="500" style="border:none;"></iframe>
 ```
+
+The `?v=2` query string is a cache-buster. Browsers and Squarespace's CDN can cache
+iframe contents, so after pushing changes to `index.html` on `main` (and waiting for
+the "pages build and deployment" GitHub Action to finish), bump the number in the
+Squarespace embed code (e.g. `?v=3`) and re-save the page so it fetches the latest
+version instead of a stale cached copy.
+
+**Note:** GitHub Pages only serves what's on the `main` branch. If you don't see your
+latest changes reflected on the live Squarespace page, first confirm the change has
+been merged into `main` and that the "pages build and deployment" workflow has
+completed (Actions tab), before assuming it's a caching issue.
