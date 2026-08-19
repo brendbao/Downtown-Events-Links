@@ -37,7 +37,9 @@
 
     function driveImageUrl(driveLink) {
       const id = extractDriveFileId(driveLink);
-      return id ? `https://drive.google.com/uc?export=view&id=${id}` : "";
+      // Google Drive blocks the old "uc?export=view" format from being embedded
+      // in <img> tags (OpaqueResponseBlocking). The "thumbnail" endpoint works instead.
+      return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1000` : "";
     }
 
     async function loadAnnouncement() {
