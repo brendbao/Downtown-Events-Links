@@ -252,7 +252,7 @@
     const FIELD_EVENT_DATE = "Event Date";     // optional column; used to power the calendar
     const FIELD_EVENT_NAME = "Event Name";     // optional column; short label shown on the calendar day
     const FIELD_CAL_IMAGE = "Calendar Image";  // optional column; hover-preview image shown on the calendar day
-    const FIELD_REPEAT = "Repeat";             // optional column; "Weekly", "Bi-Weekly", "Monthly"
+    const FIELD_REPEAT = "Repeat";             // optional column; "Everyday", "Weekly", "Bi-Weekly", "Monthly"
     const FIELD_REPEAT_UNTIL = "Repeat Until"; // optional column; date the recurrence stops
 
     // Normalizes a header name for loose matching: lowercase + collapse/trim whitespace
@@ -365,7 +365,9 @@
       let current = startDate;
 
       while (occurrences.length < MAX_OCCURRENCES) {
-        if (repeatRaw === "weekly") {
+        if (repeatRaw === "everyday" || repeatRaw === "every day" || repeatRaw === "daily") {
+          current = addDays(current, 1);
+        } else if (repeatRaw === "weekly") {
           current = addDays(current, 7);
         } else if (repeatRaw === "bi-weekly" || repeatRaw === "biweekly") {
           current = addDays(current, 14);
