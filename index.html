@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Downtown Events Announcement Widget</title>
 <style>
-  body { margin:0; font-family: Arial, sans-serif; background: transparent; color:#222; }
+  body { margin:0; font-family: Arial, sans-serif; background: transparent; color:#1a1a1a; }
 
   /* Calendar */
   #calendar-wrap { max-width: 900px; margin: 0 auto 32px; padding: 8px; }
@@ -15,7 +15,7 @@
     margin-bottom: 12px;
   }
   #calendar-header button {
-    background: #f2670a;
+    background: #1c75bc;
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -23,8 +23,8 @@
     font-size: 16px;
     cursor: pointer;
   }
-  #calendar-header button:hover { opacity: 0.9; }
-  #calendar-title { font-size: 20px; font-weight: bold; }
+  #calendar-header button:hover { background: #15619e; }
+  #calendar-title { font-size: 20px; font-weight: bold; color: #1c75bc; }
   #calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -34,28 +34,36 @@
     text-align: center;
     font-size: 12px;
     font-weight: bold;
-    color: #888;
+    color: #1c75bc;
     padding: 4px 0;
   }
   .cal-day {
-    min-height: 64px;
-    border: 1px solid #eee;
+    min-height: 84px;
+    border: 1px solid #e3edf5;
     border-radius: 6px;
     padding: 4px;
-    font-size: 13px;
+    font-size: 12px;
     position: relative;
     cursor: default;
+    overflow: hidden;
   }
   .cal-day.empty { border: none; }
-  .cal-day .cal-daynum { font-size: 12px; color: #555; }
-  .cal-day.has-event { cursor: pointer; background: #fff6ee; border-color: #f2670a; }
-  .cal-day.has-event:hover { background: #ffe9d6; }
-  .cal-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #f2670a;
-    margin: 4px auto 0;
+  .cal-day .cal-daynum { font-size: 12px; color: #555; font-weight: bold; }
+  .cal-day.has-event { cursor: pointer; background: #eaf3fb; border-color: #1c75bc; }
+  .cal-day.has-event:hover { background: #d9ebf8; }
+  .cal-event-name {
+    display: block;
+    background: #f5a623;
+    color: #fff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 2px 4px;
+    margin-top: 3px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Announcement cards */
@@ -75,7 +83,7 @@
     scroll-margin-top: 16px;
   }
   .announcement-card.highlight {
-    box-shadow: 0 0 0 4px #f2670a;
+    box-shadow: 0 0 0 4px #f5a623;
   }
   .announcement-card img {
     width: 100%;
@@ -88,7 +96,8 @@
   .announcement-card .caption {
     margin-top: 10px;
     font-size: 18px;
-    color: #333;
+    color: #1c75bc;
+    font-weight: bold;
   }
   a.announcement-link { text-decoration:none; color: inherit; }
   #status-message { text-align:center; padding: 8px; font-family: Arial, sans-serif; }
@@ -118,6 +127,7 @@
     const FIELD_CAPTION = "Caption";       // optional column; safe if it doesn't exist
     const FIELD_SHOW = "Show";             // optional column; add "Yes"/"No" per row to control visibility
     const FIELD_EVENT_DATE = "Event Date"; // optional column; used to power the calendar
+    const FIELD_EVENT_NAME = "Event Name"; // optional column; short label shown on the calendar day
 
     function extractDriveFileId(url) {
       if (!url) return null;
@@ -168,6 +178,14 @@
       return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
     }
 
+    function escapeHtml(str) {
+      return (str || "").toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
     let allRows = [];
     let calendarDate = new Date(); // current month being viewed
     calendarDate.setDate(1);
@@ -206,11 +224,18 @@
 
       for (let day = 1; day <= daysInMonth; day++) {
         const key = dateKey(new Date(year, month, day));
-        const hasEvent = !!eventsByDay[key];
+        const dayEvents = eventsByDay[key] || [];
+        const hasEvent = dayEvents.length > 0;
+
+        const namesHtml = dayEvents.map(row => {
+          const name = row[FIELD_EVENT_NAME] || row[FIELD_CAPTION] || "Event";
+          return `<span class="cal-event-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+        }).join("");
+
         html += `
           <div class="cal-day${hasEvent ? " has-event" : ""}" ${hasEvent ? `data-key="${key}"` : ""}>
             <div class="cal-daynum">${day}</div>
-            ${hasEvent ? `<div class="cal-dot" title="${eventsByDay[key].length} event(s)"></div>` : ""}
+            ${namesHtml}
           </div>
         `;
       }
@@ -239,6 +264,8 @@
       calendarDate.setMonth(calendarDate.getMonth() + 1);
       renderCalendar();
     });
+
+    const FIELD_CAPTION_FALLBACK = FIELD_CAPTION; // kept for clarity in renderCalendar
 
     async function loadAnnouncements() {
       const statusEl = document.getElementById("status-message");
